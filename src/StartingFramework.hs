@@ -122,3 +122,12 @@ timeSpent = undefined
 ppMonth :: Year -> Month -> Calendar -> String
 ppMonth = undefined
 
+-- help parsers
+yearP :: Parser Char Year 
+yearP = (\x y z w -> Year $ read $ [x,y,z,w]) <$> digit <*> digit <*> digit <*> digit
+
+yearP :: Parser Char Month 
+yearP = (\x y -> Month $ read $ [x,y]) <$> digit <*> digit
+
+yearP :: Parser Char Day
+yearP = (\x y -> Day $ read $ [x,y]) <$> digit <*> digit
