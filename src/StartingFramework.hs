@@ -87,17 +87,74 @@ parsePrint s = fmap printDateTime $ run parseDateTime s
 
 -- Exercise 5
 checkDateTime :: DateTime -> Bool
-checkDateTime = undefined
+checkDateTime x     | monthBool && dayBool && hourBool && minuteBool && secondBool = True
+                    | otherwise = False
+                where 
+                    jaar = unYear $ year $ date x
+                    maand = unMonth $ month $ date x
+                    dag = unDay $ day $ date x
+                    leap = leapYear $ jaar
+                    monthBool = checkMonth $ maand
+                    dayBool = checkDay leap maand dag
+                    hourBool = checkHour $ unHour $ hour $ time x
+                    minuteBool = checkMinute $ unMinute $ minute $ time x
+                    secondBool = checkSecond $ unSecond $ second $ time x
+
+
+
+-- help functions
+checkMonth :: Int -> Bool
+checkMonth x  | x < 13 && x > 0   = True
+              | otherwise         = False
+
+leapYear :: Int -> Bool
+leapYear x      | mod x 400 == 0 = True
+                | mod x 100 == 0 = False
+                | mod x 4 == 0 = True
+                | otherwise = False
+
+checkDay :: Bool -> Int -> Int -> Bool -- Takes bool for leapyear and an int for month/day
+checkDay b m d  | d < 32 && d > 0 && 
+                (m == 1 || m == 3 || m == 5 || m == 7 || 
+                m ==  8 || m == 10 || m == 12)                  = True
+                | d < 31 && d > 0 && 
+                (m == 4 || m == 6 || m == 9 || m == 11)         = True
+                | d < 29 && d > 0 && m == 2 && b == True        = True
+                | d < 28 && d > 0 && m == 2 && b == False       = True
+                | otherwise                                     = False
+              
+checkHour :: Int -> Bool
+checkHour x | x <= 23 && x >= 0 = True
+            | otherwise = False
+
+checkMinute :: Int -> Bool
+checkMinute x   | x <= 59 && x >= 0 = True
+                | otherwise = False    
+
+checkSecond :: Int -> Bool
+checkSecond x   | x <= 59 && x >= 0 = True
+                | otherwise = False
+
+
 
 -- Exercise 6
-data Calendar = Calendar
+data Calendar = Calendar { prodid :: String
+                         , version :: String
+                         , event :: [Event] }
     deriving (Eq, Ord, Show)
 
-data Event = Event
+
+data Event = Event  { dtstamp :: DateTime 
+                    , uid :: String
+                    , dtstart :: DateTime
+                    , dtend :: DateTime
+                    , description :: String
+                    , summary :: String
+                    , location :: String}
     deriving (Eq, Ord, Show)
 
 -- Exercise 7
-data Token = Token
+data Token = Token  
     deriving (Eq, Ord, Show)
 
 scanCalendar :: Parser Char [Token]
