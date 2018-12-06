@@ -59,15 +59,28 @@ mainCalendar = do
 
 -- Exercise 1
 parseDateTime :: Parser Char DateTime
-parseDateTime = undefined
+parseDateTime = (\x _ y z -> DateTime x y z) <$> dateP <*> anySymbol <*> timeP <*> utcP 
 
 -- Exercise 2
 run :: Parser a b -> [a] -> Maybe b
-run = undefined
+run p x = case head (parse p x) of 
+        (xs,[]) -> Just xs
+        _       -> Nothing
 
 -- Exercise 3
 printDateTime :: DateTime -> String
-printDateTime = undefined
+printDateTime x = yearx ++ monthx ++ dayx ++ ['T'] ++ hourx ++ minutex ++ secondx ++ utcx
+                where 
+                    yearx = show $ unYear $ year $ date x
+                    monthx = show $ unMonth $ month $ date x
+                    dayx = show $ unDay $ day $ date x
+                    hourx = show $ unHour $ hour $ time x
+                    minutex = show $ unMinute $ minute $ time x
+                    secondx = show $ unSecond $ second $ time x
+                    utcx = case utc x of
+                            True -> ['Z']
+                            False -> []
+
 
 -- Exercise 4
 parsePrint s = fmap printDateTime $ run parseDateTime s
@@ -123,11 +136,30 @@ ppMonth :: Year -> Month -> Calendar -> String
 ppMonth = undefined
 
 -- help parsers
+dateP :: Parser Char Date
+dateP = (\x y z -> Date x y z) <$> yearP <*> monthP <*> dayP
+
 yearP :: Parser Char Year 
 yearP = (\x y z w -> Year $ read $ [x,y,z,w]) <$> digit <*> digit <*> digit <*> digit
 
-yearP :: Parser Char Month 
-yearP = (\x y -> Month $ read $ [x,y]) <$> digit <*> digit
+monthP :: Parser Char Month 
+monthP = (\x y -> Month $ read $ [x,y]) <$> digit <*> digit
 
-yearP :: Parser Char Day
-yearP = (\x y -> Day $ read $ [x,y]) <$> digit <*> digit
+dayP :: Parser Char Day
+dayP = (\x y -> Day $ read $ [x,y]) <$> digit <*> digit
+
+timeP :: Parser Char Time
+timeP = (\x y z -> Time x y z) <$> hourP <*> minuteP <*> secondP
+
+hourP :: Parser Char Hour 
+hourP = (\x y -> Hour $ read $ [x,y]) <$> digit <*> digit
+
+minuteP :: Parser Char Minute
+minuteP = (\x y -> Minute $ read $ [x,y]) <$> digit <*> digit
+
+secondP :: Parser Char Second
+secondP = (\x y -> Second $ read $ [x,y]) <$> digit <*> digit
+
+utcP :: Parser Char Bool
+utcP = (\x -> x == 'Z') <$> option anySymbol 'F'
+
