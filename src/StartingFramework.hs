@@ -152,13 +152,15 @@ checkMonth :: Int -> Bool
 checkMonth x  | x < 13 && x > 0   = True
               | otherwise         = False
 
+-- | checks for a leap year
 leapYear :: Int -> Bool
 leapYear x      | mod x 400 == 0 = True
                 | mod x 100 == 0 = False
                 | mod x 4 == 0 = True
                 | otherwise = False
-
-checkDay :: Bool -> Int -> Int -> Bool -- Takes bool for leapyear and an int for month/day
+    
+ -- | Takes bool for leapyear and an int for month/day
+checkDay :: Bool -> Int -> Int -> Bool
 checkDay b m d  | d < 32 && d > 0 && 
                 (m == 1 || m == 3 || m == 5 || m == 7 || 
                 m ==  8 || m == 10 || m == 12)                  = True
@@ -185,7 +187,7 @@ data Calendar = Calendar { prodid :: String
                          , version :: String
                          , event :: [Event] }
     deriving (Eq, Ord)
-
+-- | Custom print for the Calendar
 instance Show Calendar where
     show Calendar{prodid = id, version = ver, event = evs} =
                "BEGIN:VCALENDAR\r\n"
@@ -205,6 +207,7 @@ instance Show Calendar where
             checkEmpty (Nothing, _) = ""
             checkEmpty (Just v,s)   = s ++ v ++ "\r\n"
 
+-- | Due to the use of listOf as our main Lexing method, the Parser crashes if the input ends on a "\n\r"; this removes that
 cheekyCheck :: String -> String
 cheekyCheck  = reverse . f . reverse
                 where f ('\n':'\r':xs) = xs
@@ -234,36 +237,12 @@ scanCalendar =  flip listOf pSep
 
 pSep :: Parser Char Bool
 pSep = True <$ token "\r\n"
- {-permutations
-   subsequence
-    BEv
-  | EEv
-  | Stamp DateTime
-  | UID String
-  | DTS DateTime
-  | DTE DateTime
-  | DES String
-  | SUM String
-  | LOC String
-  | BCal
-  | ECal
-  | ProdID String
-  | Version Float
--}
 
 parseCalendar :: Parser Token Calendar
 parseCalendar = parseCalendar1 <|> parseCalendar2
 parseCalendar1 = (\x y z -> Calendar y x z) <$ parseBCal <*> parseVersion <*> parseProdID <*> parseEvents <* parseECal
 parseCalendar2 = (\x y z -> Calendar x y z) <$ parseBCal <*> parseProdID <*> parseVersion <*> parseEvents <* parseECal
 
-{-
-parsen tot beginevent of endcalender
-permutations over deze tokens
-
-BCal -> ProdID / Version -> (BEv)* -> ECal
-(\x y [z] -> Calendar x y [z]) z kan leeg zijn x en y liggend aan prodid positie
-parseEvents :: Parser Token [Event]
--}
 recognizeCalendar :: String -> Maybe Calendar
 recognizeCalendar s = run scanCalendar s >>= run parseCalendar
 
@@ -466,39 +445,11 @@ parseEEvent = satisfy (\x -> x == EEv)
 
 parseAllEvent :: Parser Token Token
 parseAllEvent = satisfy isStamp <|> satisfy isUID <|> satisfy isDTS <|> satisfy isDTE <|> satisfy isDES <|> satisfy isSUM <|> satisfy isLOC
-{-
-isStamp2 :: Token -> Bool
-isStamp2 (Stamp _) = True
-isStamp2 _         = False
 
-isUID2 :: Token -> Bool
-isUID2 (UID _) = True
-isUID2 _         = False
-
-isDTS2 :: Token -> Bool
-isDTS2 (DTS _) = True
-isDTS2 _         = False
-
-isDTE2 :: Token -> Bool
-isDTE2 (DTE _) = True
-isDTE2 _         = False
-
-isDES2 :: Token -> Bool
-isDES2 (DES _) = True
-isDES2 _         = False
-
-isSUM2 :: Token -> Bool
-isSUM2 (SUM _) = True
-isSUM2 _         = False
-
-isLOC2 :: Token -> Bool
-isLOC2 (LOC _) = True
-isLOC2 _         = False
--}
 -- Legacy Code
 
 -- No easy way to automatically generate a list of all the derived functions
-
+{-
 mandatoryTokens :: [Token] -> Bool
 mandatoryTokens = (one_s==) . flip map (count `fmap` is_s) . flip ($)
             where
@@ -506,12 +457,11 @@ mandatoryTokens = (one_s==) . flip map (count `fmap` is_s) . flip ($)
                 is_s  = [isBEv, isECal, isProdID, isVersion]
                 one_s = replicate (length is_s)  1
 
-{-
 tokenRestraints :: [Token] -> Bool
 tokenRestraints = flip map (count `fmap` is_s) . flip ($)
     where count f = length . filter f
           is_s  = [isBEv, isEEv, isStamp, isUID, isDTS, isDTE, isDES, isSUM, isLOC, isBCal, isECal, isProdID, isVersion]
--}
+
 
 setupCalendar :: [Token] -> Maybe Calendar
 setupCalendar tks = let events = []
@@ -522,3 +472,4 @@ setupCalendar tks = let events = []
             (Nothing, _)                                -> Nothing
             (_, Nothing)                                -> Nothing
             ( Just (ProdID pId_), Just (Version v_) )   -> Just Calendar {prodid= pId_, version = v_, event=events}
+-}
