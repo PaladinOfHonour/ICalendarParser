@@ -3,6 +3,8 @@ module Main where
 
 -- | TemplateHaskell used by DeriveTH
 
+-- !! The program only compiles with "ghc --make -O YourFile.hs" if the pacakges below are acccesible, beware of sandbox etc !!
+
 import Prelude hiding ((<*>),(*>),(<*),(<$>),(<$),($>))
 import Data.List (intercalate, find, permutations, concatMap, unzip, sort, nubBy)
 import Data.Text (stripEnd, pack, unpack)
