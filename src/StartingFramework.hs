@@ -1,11 +1,13 @@
+{-# LANGUAGE TemplateHaskell #-}
 module Main where
 
 import Prelude hiding ((<*>),(*>),(<*),(<$>),(<$),($>))
-import Data.List (intercalate)
+import Data.List (intercalate, find)
 import Data.Maybe (fromJust)
 
 import ParseLib.Abstract
 import System.Environment
+import Data.DeriveTH (derive, makeIs)
 
 -- Starting Framework
 
@@ -14,6 +16,9 @@ data DateTime = DateTime { date :: Date
                          , time :: Time
                          , utc :: Bool }
     deriving (Eq, Ord)
+
+instance Show DateTime where
+    show = printDateTime
 
 data Date = Date { year  :: Year
                  , month :: Month
@@ -33,12 +38,43 @@ newtype Hour   = Hour { unHour :: Int } deriving (Eq, Ord)
 newtype Minute = Minute { unMinute :: Int } deriving (Eq, Ord)
 newtype Second = Second { unSecond :: Int } deriving (Eq, Ord)
 
+printDateTime :: DateTime -> String
+printDateTime x = yearx ++ monthx ++ dayx ++ ['T'] ++ hourx ++ minutex ++ secondx ++ utcx
+                where 
+                    yearx = show $ unYear $ year $ date x
+                    monthx = show $ unMonth $ month $ date x
+                    dayx = show $ unDay $ day $ date x
+                    hourx = show $ unHour $ hour $ time x
+                    minutex = show $ unMinute $ minute $ time x
+                    secondx = show $ unSecond $ second $ time x
+                    utcx = case utc x of
+                            True -> ['Z']
+                            False -> []
+
+--------- Splice -----------
+
+data Token = 
+    BEv
+  | EEv
+  | Stamp DateTime
+  | UID String
+  | DTS DateTime
+  | DTE DateTime
+  | DES String
+  | SUM String
+  | LOC String
+  | BCal
+  | ECal
+  | ProdID String
+  | Version Float
+  deriving (Eq, Ord, Show) --{-! Is !-}
+
+-- Derive magic
+$( derive makeIs ''Token )
+
 
 -- | The main interaction function. Used for IO, do not edit.
 data Result = SyntaxError | Invalid DateTime | Valid DateTime deriving (Eq, Ord)
-
-instance Show DateTime where
-    show = printDateTime
 
 instance Show Result where
     show SyntaxError = "date/time with wrong syntax"
@@ -48,7 +84,7 @@ instance Show Result where
 main :: IO ()
 --main = putStrLn $ show $ fromJust $ run parseDateTime "19970610T172345Z"
 --main = putStrLn $ unlines $ map show $ fromJust $ run scanCalendar " DTSTAMP:19970610T172345Z    "
-main = mapM_ putStrLn $ map (show . fromJust . run scanCalendar)
+main = putStrLn $ show . setupCalendar . concat $ map (fromJust . run scanCalendar)
         [
             "BEGIN:VCALENDAR ",
             " PRODID:-//hacksw/handcal//NONSGML v1.0//EN",
@@ -88,19 +124,7 @@ run p x = case head (parse p x) of
         _       -> Nothing
 
 -- Exercise 3
-printDateTime :: DateTime -> String
-printDateTime x = yearx ++ monthx ++ dayx ++ ['T'] ++ hourx ++ minutex ++ secondx ++ utcx
-                where 
-                    yearx = show $ unYear $ year $ date x
-                    monthx = show $ unMonth $ month $ date x
-                    dayx = show $ unDay $ day $ date x
-                    hourx = show $ unHour $ hour $ time x
-                    minutex = show $ unMinute $ minute $ time x
-                    secondx = show $ unSecond $ second $ time x
-                    utcx = case utc x of
-                            True -> ['Z']
-                            False -> []
-
+--Due to the splice, this has been moved to line 41
 
 -- Exercise 4
 parsePrint s = fmap printDateTime $ run parseDateTime s
@@ -159,7 +183,7 @@ checkSecond x   | x <= 59 && x >= 0 = True
 
 -- Exercise 6
 data Calendar = Calendar { prodid :: String
-                         , version :: String
+                         , version :: Float
                          , event :: [Event] }
     deriving (Eq, Ord, Show)
 
@@ -174,23 +198,6 @@ data Event = Event  { dtstamp :: DateTime
     deriving (Eq, Ord, Show)
 
 -- Exercise 7
-data Token = 
-      BEv
-    | EEv
-    | Stamp DateTime
-    | UID String
-    | DTS DateTime
-    | DTE DateTime
-    | DES String
-    | SUM String
-    | LOC String
-    | BCal
-    | ECal
-    | ProdID String
-    | Version Float
-    deriving (Eq, Ord, Show)
-
-
 scanCalendar :: Parser Char [Token]
 scanCalendar =  
                 (*>) pSpaces $ many $ foldl (<|>) pBeginCalHeader
@@ -311,3 +318,28 @@ pVerNum = read <$> some anySymbol <* pSpaces
 
 pSpaces :: Parser Char String
 pSpaces         = many $ satisfy (\c -> c == ' ')
+
+-- No easy way to automatically generate a list of all the derived functions
+
+mandatoryTokens :: [Token] -> Bool
+mandatoryTokens = (one_s==) . flip map (count `fmap` is_s) . flip ($)
+            where
+                count f = length . filter f
+                is_s  = [isBEv, isECal, isProdID, isVersion]
+                one_s = replicate (length is_s)  1
+{-
+tokenRestraints :: [Token] -> Bool
+tokenRestraints = flip map (count `fmap` is_s) . flip ($)
+    where count f = length . filter f
+          is_s  = [isBEv, isEEv, isStamp, isUID, isDTS, isDTE, isDES, isSUM, isLOC, isBCal, isECal, isProdID, isVersion]
+-}
+
+setupCalendar :: [Token] -> Maybe Calendar
+setupCalendar tks = let events = []
+    in do
+        let pId = find isProdID tks
+        let v   = find isVersion tks
+        case (pId, v) of
+            (Nothing, _)                                -> Nothing
+            (_, Nothing)                                -> Nothing
+            ( Just (ProdID pId_), Just (Version v_) )   -> Just Calendar {prodid= pId_, version = v_, event=events}
