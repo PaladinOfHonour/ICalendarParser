@@ -2,7 +2,7 @@
 module Main where
 
 import Prelude hiding ((<*>),(*>),(<*),(<$>),(<$),($>))
-import Data.List (intercalate, find)
+import Data.List (intercalate, find, permutations)
 import Data.Maybe (fromJust)
 
 import ParseLib.Abstract
@@ -67,7 +67,7 @@ data Token =
   | BCal
   | ECal
   | ProdID String
-  | Version Float
+  | Version String
   deriving (Eq, Ord, Show) --{-! Is !-}
 
 makeEvent :: [Token] -> Maybe Event
@@ -224,9 +224,9 @@ data Event = Event  { dtstamp :: DateTime
                     , uid :: String
                     , dtstart :: DateTime
                     , dtend :: DateTime
-                    , description :: String
-                    , summary :: String
-                    , location :: String}
+                    , description :: Maybe String
+                    , summary :: Maybe String
+                    , location :: Maybe String}
     deriving (Eq, Ord, Show)
 
 -- Exercise 7
@@ -244,10 +244,36 @@ scanCalendar =  flip listOf pSep
 
 pSep :: Parser Char Bool
 pSep = True <$ token "\r\n"
+ {-permutations
+   subsequence
+    BEv
+  | EEv
+  | Stamp DateTime
+  | UID String
+  | DTS DateTime
+  | DTE DateTime
+  | DES String
+  | SUM String
+  | LOC String
+  | BCal
+  | ECal
+  | ProdID String
+  | Version Float
+-}
 
 parseCalendar :: Parser Token Calendar
-parseCalendar = undefined
+parseCalendar = parseCalendar1 <|> parseCalendar2
+parseCalendar1 = (\x y -> Calendar y x []) <$ parseBCal <*> parseVersion <*> parseProdID <* eof
+parseCalendar2 = (\x y -> Calendar x y []) <$ parseBCal <*> parseProdID <*> parseVersion <* eof
 
+{-
+parsen tot beginevent of endcalender
+permutations over deze tokens
+
+BCal -> ProdID / Version -> (BEv)* -> ECal
+(\x y [z] -> Calendar x y [z]) z kan leeg zijn x en y liggend aan prodid positie
+parseEvents :: Parser Token [Event]
+-}
 recognizeCalendar :: String -> Maybe Calendar
 recognizeCalendar s = run scanCalendar s >>= run parseCalendar
 
@@ -332,7 +358,7 @@ pProdID :: Parser Char Token
 pProdID         = (<$>) ProdID $ token "PRODID:" *> pString_ <* pSpaces
 
 pVersion :: Parser Char Token
-pVersion        = (<$>) Version $ token "VERSION:" *> pVerNum <* pSpaces
+pVersion        = (<$>) Version $ token "VERSION:" *> pString_ <* pSpaces
 
 pUID :: Parser Char Token
 pUID            = (<$>) UID $ token "UID:" *> pString_ <* pSpaces
@@ -389,3 +415,92 @@ setupCalendar tks = let events = []
             (Nothing, _)                                -> Nothing
             (_, Nothing)                                -> Nothing
             ( Just (ProdID pId_), Just (Version v_) )   -> Just Calendar {prodid= pId_, version = v_, event=events}
+
+parseBCal :: Parser Token Token
+parseBCal = satisfy (\x -> x == BCal)
+
+parseECal :: Parser Token Token
+parseECal = satisfy (\x -> x == ECal)
+
+parseVersion :: Parser Token String
+parseVersion = whatVersion <$> satisfy isVersion
+
+isVersion2 :: Token -> Bool
+isVersion2 (Version _) = True
+isVersion2 _        = False
+
+whatVersion :: Token -> String
+whatVersion (Version x) = x 
+whatVersion _        = error "This is not the version you were looking for."
+
+parseProdID :: Parser Token String
+parseProdID = whatProdID <$> satisfy isProdID2
+
+isProdID2 :: Token -> Bool
+isProdID2 (ProdID _) = True
+isProdID2 _          = False
+
+whatProdID :: Token -> String
+whatProdID (ProdID x) = x 
+whatProdID _          = error "This is not the prodID you were looking for."
+
+parseEvents :: Parser Token [Event]
+parseEvents = many parseEvent <|> const [] <$> parseECal
+
+parseEvent :: Parser Token Event
+parseEvent = fromJust . eventTokenHandler . oi <$ parseBEvent <*> greedy parseAllEvent <* parseEEvent
+
+oi :: [Token] -> [[Token]]
+oi x = permutations x
+
+eventTokenHandler :: [[Token]] -> Maybe Event
+eventTokenHandler [] = Nothing 
+eventTokenHandler [[]] = Nothing
+eventTokenHandler a = case head a of
+                        [Stamp x,UID y,DTS z,DTE r]                     -> Just (Event x y z r Nothing Nothing Nothing)
+                        [Stamp x,UID y,DTS z,DTE r,DES s]               -> Just (Event x y z r (Just s) Nothing Nothing)
+                        [Stamp x,UID y,DTS z,DTE r,SUM t]               -> Just (Event x y z r Nothing (Just t) Nothing)
+                        [Stamp x,UID y,DTS z,DTE r,LOC u]               -> Just (Event x y z r Nothing Nothing (Just u))
+                        [Stamp x,UID y,DTS z,DTE r,DES s,SUM t]         -> Just (Event x y z r (Just s) (Just t) Nothing)
+                        [Stamp x,UID y,DTS z,DTE r,DES s,LOC u]         -> Just (Event x y z r (Just s) Nothing (Just u))
+                        [Stamp x,UID y,DTS z,DTE r,SUM t,LOC u]         -> Just (Event x y z r Nothing (Just t) (Just u))
+                        [Stamp x,UID y,DTS z,DTE r,DES s,SUM t,LOC u]   -> Just (Event x y z r (Just s) (Just t) (Just u))
+                        otherwise                                       -> eventTokenHandler (tail a)
+
+
+parseBEvent :: Parser Token Token
+parseBEvent = satisfy (\x -> x == BEv)
+
+parseEEvent :: Parser Token Token
+parseEEvent = satisfy (\x -> x == EEv)
+
+parseAllEvent :: Parser Token Token
+parseAllEvent = satisfy isStamp2 <|> satisfy isUID2 <|> satisfy isDTS2 <|> satisfy isDTE2 <|> satisfy isDES2 <|> satisfy isSUM2 <|> satisfy isLOC2
+
+isStamp2 :: Token -> Bool
+isStamp2 (Stamp _) = True
+isStamp2 _         = False
+
+isUID2 :: Token -> Bool
+isUID2 (UID _) = True
+isUID2 _         = False
+
+isDTS2 :: Token -> Bool
+isDTS2 (DTS _) = True
+isDTS2 _         = False
+
+isDTE2 :: Token -> Bool
+isDTE2 (DTE _) = True
+isDTE2 _         = False
+
+isDES2 :: Token -> Bool
+isDES2 (DES _) = True
+isDES2 _         = False
+
+isSUM2 :: Token -> Bool
+isSUM2 (SUM _) = True
+isSUM2 _         = False
+
+isLOC2 :: Token -> Bool
+isLOC2 (LOC _) = True
+isLOC2 _         = False
