@@ -105,13 +105,6 @@ mainDateTime = interact (printOutput . processCheck . processInput)
         processInput = map (run parseDateTime) . lines
         processCheck = map (maybe SyntaxError (\x -> if checkDateTime x then Valid x else Invalid x))
         printOutput  = unlines . map show
-{-
-mainCalendar :: IO ()
-mainCalendar = do
-    file:_ <- getArgs
-    res <- readCalendar file
-    putStrLn $ maybe "Calendar parsing error" (ppMonth (Year 2012) (Month 11)) res
--}
 
 -- Exercise 1
 parseDateTime :: Parser Char DateTime
@@ -234,36 +227,13 @@ scanCalendar =  flip listOf pSep
 
 pSep :: Parser Char Bool
 pSep = True <$ token "\r\n"
- {-permutations
-   subsequence
-    BEv
-  | EEv
-  | Stamp DateTime
-  | UID String
-  | DTS DateTime
-  | DTE DateTime
-  | DES String
-  | SUM String
-  | LOC String
-  | BCal
-  | ECal
-  | ProdID String
-  | Version Float
--}
+
 
 parseCalendar :: Parser Token Calendar
-parseCalendar = parseCalendar1 <|> parseCalendar2
+parseCalendar = parseCalendar1 <|> parseCalendar2 -- parser either the version or the prodID first than goes on to parse events at line 407
 parseCalendar1 = (\x y z -> Calendar y x z) <$ parseBCal <*> parseVersion <*> parseProdID <*> parseEvents <* parseECal
 parseCalendar2 = (\x y z -> Calendar x y z) <$ parseBCal <*> parseProdID <*> parseVersion <*> parseEvents <* parseECal
 
-{-
-parsen tot beginevent of endcalender
-permutations over deze tokens
-
-BCal -> ProdID / Version -> (BEv)* -> ECal
-(\x y [z] -> Calendar x y [z]) z kan leeg zijn x en y liggend aan prodid positie
-parseEvents :: Parser Token [Event]
--}
 recognizeCalendar :: String -> Maybe Calendar
 recognizeCalendar s = run scanCalendar s >>= run parseCalendar
 
@@ -438,13 +408,10 @@ parseEvents :: Parser Token [Event]
 parseEvents = many parseEvent <|> const [] <$> parseECal
 
 parseEvent :: Parser Token Event
-parseEvent = fromJust . eventTokenHandler . oi <$ parseBEvent <*> greedy parseAllEvent <* parseEEvent
+parseEvent = fromJust . eventTokenHandler . permutations <$ parseBEvent <*> greedy parseAllEvent <* parseEEvent
 
-oi :: [Token] -> [[Token]]
-oi x = permutations x
-
-eventTokenHandler :: [[Token]] -> Maybe Event
-eventTokenHandler [] = Nothing 
+eventTokenHandler :: [[Token]] -> Maybe Event   -- Recursively go through all permutations
+eventTokenHandler [] = Nothing                  -- pattern match on the tokens for every case
 eventTokenHandler [[]] = Nothing
 eventTokenHandler a = case head a of
                         [Stamp x,UID y,DTS z,DTE r]                     -> Just (Event x y z r Nothing Nothing Nothing)
