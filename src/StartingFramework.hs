@@ -1,5 +1,9 @@
 module Main where
 
+import Prelude hiding ((<*>),(*>),(<*),(<$>),(<$),($>))
+import Data.List (intercalate)
+import Data.Maybe (fromJust)
+
 import ParseLib.Abstract
 import System.Environment
 
@@ -42,7 +46,23 @@ instance Show Result where
     show (Valid x)   = "valid date: " ++ show x
 
 main :: IO ()
-main = mainDateTime
+--main = putStrLn $ show $ fromJust $ run parseDateTime "19970610T172345Z"
+--main = putStrLn $ unlines $ map show $ fromJust $ run scanCalendar " DTSTAMP:19970610T172345Z    "
+main = mapM_ putStrLn $ map (show . fromJust . run scanCalendar)
+        [
+            "BEGIN:VCALENDAR ",
+            " PRODID:-//hacksw/handcal//NONSGML v1.0//EN",
+            "   VERSION:       2.0",
+            "BEGIN:VEVENT    ",
+            "SUMMARY:Bastille Day Party    ",
+            "UID: 19970610T172345Z-AF23B2@example.com",
+            "DTSTAMP:19970610T172345Z",
+            "DTSTART:19970714T170000Z  ",
+            "    DTEND:19970715T040000Z",
+            "END:VEVENT",
+            " END:VCALENDAR"
+        ]
+
 
 mainDateTime :: IO ()
 mainDateTime = interact (printOutput . processCheck . processInput)
@@ -154,11 +174,32 @@ data Event = Event  { dtstamp :: DateTime
     deriving (Eq, Ord, Show)
 
 -- Exercise 7
-data Token = Token  
+data Token = 
+      BEv
+    | EEv
+    | Stamp DateTime
+    | UID String
+    | DTS DateTime
+    | DTE DateTime
+    | DES String
+    | SUM String
+    | LOC String
+    | BCal
+    | ECal
+    | ProdID String
+    | Version Float
     deriving (Eq, Ord, Show)
 
+
 scanCalendar :: Parser Char [Token]
-scanCalendar = undefined
+scanCalendar =  
+                (*>) pSpaces $ many $ foldl (<|>) pBeginCalHeader
+                 [
+                     pBeginEvHeader, pEndCalHeader, pEndEvHeader,
+                     pProdID, pVersion,
+                     pUID, pDTStamp, pDateTimeStart, pDateTimeEnd, pDescription, pSummary, pLocation
+                 ]
+                <* eof
 
 parseCalendar :: Parser Token Calendar
 parseCalendar = undefined
@@ -193,8 +234,10 @@ ppMonth :: Year -> Month -> Calendar -> String
 ppMonth = undefined
 
 -- help parsers
+-- Time Related
+
 dateP :: Parser Char Date
-dateP = (\x y z -> Date x y z) <$> yearP <*> monthP <*> dayP
+dateP = Date <$> yearP <*> monthP <*> dayP
 
 yearP :: Parser Char Year 
 yearP = (\x y z w -> Year $ read $ [x,y,z,w]) <$> digit <*> digit <*> digit <*> digit
@@ -206,7 +249,7 @@ dayP :: Parser Char Day
 dayP = (\x y -> Day $ read $ [x,y]) <$> digit <*> digit
 
 timeP :: Parser Char Time
-timeP = (\x y z -> Time x y z) <$> hourP <*> minuteP <*> secondP
+timeP = Time <$> hourP <*> minuteP <*> secondP
 
 hourP :: Parser Char Hour 
 hourP = (\x y -> Hour $ read $ [x,y]) <$> digit <*> digit
@@ -220,3 +263,51 @@ secondP = (\x y -> Second $ read $ [x,y]) <$> digit <*> digit
 utcP :: Parser Char Bool
 utcP = (\x -> x == 'Z') <$> option anySymbol 'F'
 
+-- Token Related
+pBeginCalHeader :: Parser Char Token
+pBeginCalHeader = BCal <$ token "BEGIN:VCALENDAR" <* pSpaces
+
+pBeginEvHeader :: Parser Char Token
+pBeginEvHeader  = BEv <$ token "BEGIN:VEVENT" <* pSpaces 
+
+pEndCalHeader :: Parser Char Token
+pEndCalHeader   = ECal <$ token "END:VCALENDAR" <* pSpaces
+
+pEndEvHeader :: Parser Char Token
+pEndEvHeader    = EEv <$ token "END:VEVENT" <* pSpaces
+
+pProdID :: Parser Char Token
+pProdID         = (<$>) ProdID $ token "PRODID:" *> pString_ <* pSpaces
+
+pVersion :: Parser Char Token
+pVersion        = (<$>) Version $ token "VERSION:" *> pVerNum <* pSpaces
+
+pUID :: Parser Char Token
+pUID            = (<$>) UID $ token "UID:" *> pString_ <* pSpaces
+
+pDTStamp :: Parser Char Token
+pDTStamp        = (<$>) Stamp $ token "DTSTAMP:" *> parseDateTime <* pSpaces
+
+pDateTimeStart :: Parser Char Token
+pDateTimeStart  = (<$>) DTS $ token "DTSTART:" *> parseDateTime <* pSpaces
+
+pDateTimeEnd :: Parser Char Token
+pDateTimeEnd    = (<$>) DTE $ token "DTEND:" *> parseDateTime <* pSpaces
+
+pDescription :: Parser Char Token
+pDescription    = (<$>) DES $ token "DESCRIPTION:" *> pString_ <* pSpaces
+
+pSummary :: Parser Char Token
+pSummary        = (<$>) SUM $ token "SUMMARY:" *> pString_ <* pSpaces
+
+pLocation :: Parser Char Token
+pLocation       = (<$>) LOC $ token "LOCATION:" *> pString_ <* pSpaces
+
+pString_ :: Parser Char String
+pString_        = some anySymbol
+
+pVerNum :: Parser Char Float
+pVerNum = read <$> some anySymbol <* pSpaces
+
+pSpaces :: Parser Char String
+pSpaces         = many $ satisfy (\c -> c == ' ')
