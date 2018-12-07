@@ -139,8 +139,8 @@ checkDay b m d  | d < 32 && d > 0 &&
                 m ==  8 || m == 10 || m == 12)                  = True
                 | d < 31 && d > 0 && 
                 (m == 4 || m == 6 || m == 9 || m == 11)         = True
-                | d < 29 && d > 0 && m == 2 && b == True        = True
-                | d < 28 && d > 0 && m == 2 && b == False       = True
+                | d < 30 && d > 0 && m == 2 && b == True        = True
+                | d < 29 && d > 0 && m == 2 && b == False       = True
                 | otherwise                                     = False
               
 checkHour :: Int -> Bool
