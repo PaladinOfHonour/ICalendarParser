@@ -21,6 +21,8 @@ executable ICalendarParserP1
   -- other-extensions:
   build-depends:       base >=4.11 && <4.12,
                        uu-tc,
-                       derive >= 2.6.4
+                       derive >= 2.6.4,
+                       text >= 1.2,
+                       time >= 1.8
   hs-source-dirs:      src
   default-language:    Haskell2010
