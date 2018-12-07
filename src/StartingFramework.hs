@@ -7,6 +7,7 @@ import Data.Maybe (fromJust)
 
 import ParseLib.Abstract
 import System.Environment
+import System.IO
 import Data.DeriveTH (derive, makeIs)
 
 -- Starting Framework
@@ -69,6 +70,17 @@ data Token =
   | Version Float
   deriving (Eq, Ord, Show) --{-! Is !-}
 
+makeEvent :: [Token] -> Maybe Event
+makeEvent tks  = do
+    case x@(tks !! 0) isStamp of
+        False   -> Nothing
+        True    -> let st = fromToken x
+    case y@(tks !! 1) isUID of
+        False -> Nothing
+        True -> let uid = fromToken y
+    where
+        fromToken _ a = a
+
 -- Derive magic
 $( derive makeIs ''Token )
 
@@ -117,7 +129,7 @@ mainCalendar = do
 parseDateTime :: Parser Char DateTime
 parseDateTime = (\x _ y z -> DateTime x y z) <$> dateP <*> anySymbol <*> timeP <*> utcP 
 
--- Exercise 2
+-- Exercise 2  --TODO: check if parse p x is an empty list first
 run :: Parser a b -> [a] -> Maybe b
 run p x = case head (parse p x) of 
         (xs,[]) -> Just xs
@@ -183,9 +195,29 @@ checkSecond x   | x <= 59 && x >= 0 = True
 
 -- Exercise 6
 data Calendar = Calendar { prodid :: String
-                         , version :: Float
+                         , version :: String
                          , event :: [Event] }
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord)
+
+instance Show Calendar where
+    show cal@{prodid = id, version = ver, event = evs} =
+               "BEGIN:VCALENDAR\r\n"
+            ++ "PRODUCT_ID:" ++ id ++ "\r\n"
+            ++ "VERSION:" ++ ver ++ "\r\n"
+            ++ (map showEv evs)
+            ++ "END:VCALENDAR"
+        where
+            showEv ev@{dtstamp = stamp, uid = uniqId, dtstart = dtS, dtend = dtE, descripion = des, summary = sum, location = loc} =
+                       "BEGIN:VEVENT\r\n"
+                    ++ "UID:" ++ uniqId + "\r\n"
+                    ++ "DTSTAMP:" ++ (printDateTime stamp) ++ "\r\n"
+                    ++ "DTSTART:" ++ (printDateTime dts) ++ "\r\n"
+                    ++ "DTEND:" ++ (printDateTime dte) ++ "\r\n"
+                    ++ 
+                    ++ "END:VEVENT\r\n"
+            where 
+                checkEmpty () = 
+
 
 
 data Event = Event  { dtstamp :: DateTime 
@@ -199,14 +231,19 @@ data Event = Event  { dtstamp :: DateTime
 
 -- Exercise 7
 scanCalendar :: Parser Char [Token]
-scanCalendar =  
-                (*>) pSpaces $ many $ foldl (<|>) pBeginCalHeader
+scanCalendar =  flip listOf pSep
+                (
+                (*>) pSpaces $ foldl (<|>) pBeginCalHeader
                  [
                      pBeginEvHeader, pEndCalHeader, pEndEvHeader,
                      pProdID, pVersion,
                      pUID, pDTStamp, pDateTimeStart, pDateTimeEnd, pDescription, pSummary, pLocation
                  ]
+                 )
                 <* eof
+
+pSep :: Parser Char Bool
+pSep = True <$ token "\r\n"
 
 parseCalendar :: Parser Token Calendar
 parseCalendar = undefined
@@ -216,12 +253,20 @@ recognizeCalendar s = run scanCalendar s >>= run parseCalendar
 
 -- Exercise 8
 readCalendar :: FilePath -> IO (Maybe Calendar)
-readCalendar = undefined
+readCalendar s = do
+    h <- openFile ReadMode s
+    hSetNewLineMode noNewLineTranslation
+    cont <- seq $ hGetContents h
+    {-
+    let ls      = lines cont
+    let calRaw  = intersperse "\r\n" ls
+    -}
+    return $ recognizeCalendar cont --calRaw
 
 -- Exercise 9
 -- DO NOT use a derived Show instance. Your printing style needs to be nicer than that :)
 printCalendar :: Calendar -> String
-printCalendar = undefined
+printCalendar = show
 
 -- Exercise 10
 countEvents :: Calendar -> Int
@@ -327,6 +372,7 @@ mandatoryTokens = (one_s==) . flip map (count `fmap` is_s) . flip ($)
                 count f = length . filter f
                 is_s  = [isBEv, isECal, isProdID, isVersion]
                 one_s = replicate (length is_s)  1
+
 {-
 tokenRestraints :: [Token] -> Bool
 tokenRestraints = flip map (count `fmap` is_s) . flip ($)
