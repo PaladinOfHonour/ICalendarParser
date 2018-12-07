@@ -1,6 +1,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Main where
 
+-- | TemplateHaskell used by DeriveTH
+
 import Prelude hiding ((<*>),(*>),(<*),(<$>),(<$),($>))
 import Data.List (intercalate, find, permutations, concatMap, unzip, sort, nubBy)
 import Data.Text (stripEnd, pack, unpack)
@@ -13,6 +15,8 @@ import qualified Data.Time.Calendar as C (fromGregorian, diffDays, Day(..))
 import Data.DeriveTH (derive, makeIs)
 
 -- Starting Framework
+
+                -- |   Time related Datatypes | --
 
 -- | "Target" datatype for the DateTime parser, i.e, the parser should produce elements of this type.
 data DateTime = DateTime { date :: Date
@@ -41,6 +45,7 @@ newtype Hour   = Hour { unHour :: Int } deriving (Eq, Ord)
 newtype Minute = Minute { unMinute :: Int } deriving (Eq, Ord)
 newtype Second = Second { unSecond :: Int } deriving (Eq, Ord)
 
+-- | Show instance implementation, it being a seperate function is superfluous
 printDateTime :: DateTime -> String
 printDateTime x = yearx ++ monthx ++ dayx ++ ['T'] ++ hourx ++ minutex ++ secondx ++ utcx
                 where 
@@ -54,6 +59,7 @@ printDateTime x = yearx ++ monthx ++ dayx ++ ['T'] ++ hourx ++ minutex ++ second
                             True -> ['Z']
                             False -> []
 
+-- | Represents all the primary elements of our grammar
 data Token = 
     BEv
   | EEv
@@ -71,7 +77,8 @@ data Token =
   deriving (Eq, Ord, Show) --{-! Is !-}
 
 --------- Splice -----------
-
+--Above this point the derived makeIs functions oughtn't be applied
+--------- Splice -----------
 -- Derive magic
 $( derive makeIs ''Token )
 
@@ -83,33 +90,15 @@ instance Show Result where
     show (Invalid _) = "good syntax, but invalid date or time values"
     show (Valid x)   = "valid date: " ++ show x
 
-    -- Test Data
-    --"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//hacksw/handcal//NONSGML v1.0//EN\r\nBEGIN:VEVENT\r\nUID:19970610T172345Z-AF23B2@example.com\r\nDTSTAMP:19970610T172345Z\r\nDTSTART:19970714T170000Z\r\nDTEND:19970714T190000Z\r\nSUMMARY:Bastille Day Party\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:19970610T172345Z-AF23B2@example.com\r\nDTSTAMP:19970610T172345Z\r\nDTSTART:19970714T180000Z\r\nDTEND:19970715T200000Z\r\nSUMMARY:Bastille Day Party\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
-    --[BEv, UID "19970610T172345Z-AF23B2@example.com", Stamp x, DTS x, DTE x]
-    --where x = DateTime {date = Date{year=Year 1998,month= Month 10,day= Day 8},time = Time{hour= Hour 6, minute= Minute 34, second= Second 55},utc= True}
+-- | Main loop, as we haven't implemented ex 11 it is a workig copy of "mainCalendar" [Without the pretty print]
 main :: IO ()
 main = do
     file:_  <- getArgs
     res     <- readCalendar file
     putStrLn $ show res
     putStrLn $ maybe "Calendar parsing error" (show) res
-{-
-main = putStrLn $ show . setupCalendar . concat $ map (fromJust . run scanCalendar)
-        [
-            "BEGIN:VCALENDAR ",
-            " PRODID:-//hacksw/handcal//NONSGML v1.0//EN",
-            "   VERSION:       2.0",
-            "BEGIN:VEVENT    ",
-            "SUMMARY:Bastille Day Party    ",
-            "UID: 19970610T172345Z-AF23B2@example.com",
-            "DTSTAMP:19970610T172345Z",
-            "DTSTART:19970714T170000Z  ",
-            "    DTEND:19970715T040000Z",
-            "END:VEVENT",
-            " END:VCALENDAR"
-        ]
--}
 
+-- | Used to parse just DateTimes
 mainDateTime :: IO ()
 mainDateTime = interact (printOutput . processCheck . processInput)
     where
@@ -122,7 +111,7 @@ mainCalendar = do
     file:_ <- getArgs
     res <- readCalendar file
     putStrLn $ maybe "Calendar parsing error" (ppMonth (Year 2012) (Month 11)) res
--} --TODO
+-}
 
 -- Exercise 1
 parseDateTime :: Parser Char DateTime
@@ -307,14 +296,17 @@ checkOverlapping :: Calendar -> Bool
 checkOverlapping = ((/=0) . length) . nubBy check_overlap . (\(x,y) -> zip x y) . (\(a,b) -> (sort a, sort b)) . unzip . map (\e -> (dtstart e, dtend e)) . event
     where check_overlap (_,b) (c,_) = c < b
 
+-- | Calculates the amount of time spent on activities with a given summary
+-- | If there's overlap, the function isn't defined
 timeSpent :: String -> Calendar -> Int
 timeSpent s c = res c
         where
             res         = count . map (\e -> (dtstart e, dtend e)) . filter ((s==) . fromJust . summary) . event
             count       = case checkOverlapping c of
                             False   -> sum . map (\(a,b) -> a -$- b ) 
-                            True    -> sum . (\(a,b) (c,d) -> )  . (\(x,y) -> zip x y) . (\(a,b) -> (sort a, sort b)) . unzip
+                            True    -> undefined --sum . (\z@(a,b) v@(c,d) -> if c < b then  else z -$- v )  . (\(x,y) -> zip x y) . (\(a,b) -> (sort a, sort b)) . unzip
 
+-- | a difference operator for two DateTimes, returns the difference in minutes
 (-$-) :: DateTime -> DateTime -> Int
 (-$-) DateTime{ date = date1, time = time1 } DateTime{ date = date2, time = time2 }
         = (fromInteger diffD) * 1440 + (h2 - h1) * 60 + (m2 - m1) + (s2 - s1) `div` 60
